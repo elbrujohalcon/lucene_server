@@ -13,3 +13,4 @@ erl_crash.dump
 lucene-server.jar
 cobertura.ser
 OtpErlang.jar
+jinterface-stdlib.jar
