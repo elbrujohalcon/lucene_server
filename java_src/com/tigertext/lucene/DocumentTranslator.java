@@ -11,6 +11,8 @@ import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.Fieldable;
 import org.apache.lucene.document.NumericField;
+import org.apache.lucene.search.FieldCacheTermsFilter;
+import org.apache.lucene.search.Filter;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.spatial.geohash.GeoHashUtils;
@@ -36,19 +38,19 @@ import com.ericsson.otp.erlang.OtpErlangTuple;
  */
 @SuppressWarnings("deprecation")
 public class DocumentTranslator {
-	private static final Logger		jlog		= Logger.getLogger(DocumentTranslator.class
-														.getName());
+	private static final Logger jlog = Logger
+			.getLogger(DocumentTranslator.class.getName());
 
 	/**
 	 * Highest possible tier for GEO fields
 	 */
-	public static final int			MAX_TIER	= 20;
+	public static final int MAX_TIER = 20;
 	/**
 	 * Lowest possible tier for GEO fields
 	 */
-	public static final int			MIN_TIER	= 4;
+	public static final int MIN_TIER = 4;
 
-	private Map<String, FieldType>	fields;
+	private Map<String, FieldType> fields;
 
 	/**
 	 * @author Fernando Benavides <elbrujohalcon@inaka.net> Allowed field types
@@ -99,7 +101,7 @@ public class DocumentTranslator {
 			super("Unsupported field type: " + class1);
 		}
 
-		private static final long	serialVersionUID	= 8966657853257773634L;
+		private static final long serialVersionUID = 8966657853257773634L;
 	}
 
 	/**
@@ -186,6 +188,75 @@ public class DocumentTranslator {
 			return new SortField(fieldName + "`sort",
 					new MissingLastStringOrdValComparatorSource());
 		}
+	}
+
+	/**
+	 * Returns a filter for the specified field and values
+	 * 
+	 * @return a FieldCacheTermsFilter
+	 * @throws UnsupportedFieldTypeException
+	 */
+	public Filter createFilter(OtpErlangAtom otpFieldName,
+			OtpErlangList otpFieldValues) throws UnsupportedFieldTypeException {
+		String fieldName = otpFieldName.atomValue();
+		String[] fieldValues = new String[otpFieldValues.arity()];
+		jlog.warning("types: " + this.fields);
+		for (int i = 0; i < fieldValues.length; i++) {
+			FieldType type = this.getFieldType(fieldName);
+			try {
+				switch (type) {
+				case DOUBLE:
+					fieldValues[i] = ""
+							+ ((OtpErlangDouble) otpFieldValues.elementAt(i))
+									.doubleValue();
+					break;
+				case FLOAT:
+					fieldValues[i] = ""
+							+ ((OtpErlangDouble) otpFieldValues.elementAt(i))
+									.floatValue();
+					break;
+				case ATOM:
+					fieldValues[i] = ((OtpErlangAtom) otpFieldValues
+							.elementAt(i)).atomValue();
+					break;
+				case GEO:
+					OtpErlangTuple value = (OtpErlangTuple) otpFieldValues
+							.elementAt(i);
+					double lat = ((OtpErlangDouble) value.elementAt(1))
+							.doubleValue();
+					double lng = ((OtpErlangDouble) value.elementAt(2))
+							.doubleValue();
+					fieldValues[i] = GeoHashUtils.encode(lat, lng);
+					break;
+				case INT:
+					fieldValues[i] = ""
+							+ ((OtpErlangInt) otpFieldValues.elementAt(i))
+									.intValue();
+					break;
+				case LONG:
+					fieldValues[i] = ""
+							+ ((OtpErlangLong) otpFieldValues.elementAt(i))
+									.longValue();
+					break;
+				case STRING:
+					fieldValues[i] = ((OtpErlangString) otpFieldValues
+							.elementAt(i)).stringValue();
+					break;
+				default:
+					fieldValues[i] = otpFieldValues.elementAt(i).toString();
+					break;
+				}
+			} catch (OtpErlangRangeException e) {
+				throw new UnsupportedFieldTypeException(otpFieldValues
+						.elementAt(i).getClass());
+			} catch (ClassCastException cce) {
+				cce.printStackTrace();
+				throw new ClassCastException("Couldn't cast a "
+						+ otpFieldValues.elementAt(i).getClass() + " into "
+						+ type);
+			}
+		}
+		return new FieldCacheTermsFilter(fieldName, fieldValues);
 	}
 
 	/**

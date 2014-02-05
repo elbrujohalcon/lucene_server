@@ -3,6 +3,7 @@ package com.tigertext.lucene;
 import java.io.File;
 import java.io.IOException;
 import java.io.Reader;
+import java.security.InvalidParameterException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
@@ -20,6 +21,9 @@ import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.queryParser.ParseException;
 import org.apache.lucene.queryParser.QueryParser;
 import org.apache.lucene.queryParser.ext.Extensions;
+import org.apache.lucene.search.ChainedFilter;
+import org.apache.lucene.search.FieldCacheTermsFilter;
+import org.apache.lucene.search.Filter;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
@@ -56,20 +60,20 @@ import com.tigertext.lucene.ext.RedisParserExtension;
  * 
  */
 public class LuceneServer extends OtpGenServer {
-	private static final Logger		jlog	= Logger.getLogger(LuceneServer.class
-													.getName());
+	private static final Logger jlog = Logger.getLogger(LuceneServer.class
+			.getName());
 
-	protected Analyzer				analyzer;
-	protected Directory				index;
-	protected IndexWriter			writer;
-	protected DocumentTranslator	translator;
-	protected Extensions			extensions;
+	protected Analyzer analyzer;
+	protected Directory index;
+	protected IndexWriter writer;
+	protected DocumentTranslator translator;
+	protected Extensions extensions;
 
-	private int						allowedThreads;
+	private int allowedThreads;
 
-	private int						initialThreads;
+	private int initialThreads;
 
-	private SearcherManager			searcherManager;
+	private SearcherManager searcherManager;
 
 	// TODO: Let the user configure the internal parameters (i.e. analyzer,
 	// index, writer)
@@ -153,20 +157,73 @@ public class LuceneServer extends OtpGenServer {
 			return super.getSelf();
 
 		} else if (cmdName.atomValue().equals("match")) {
-			// {match, Query :: string(), PageSize :: integer()}
-			String queryString = ((OtpErlangString) cmdTuple.elementAt(1))
-					.stringValue();
-			int pageSize = ((OtpErlangLong) cmdTuple.elementAt(2)).intValue();
-			OtpErlangObject[] sortFieldNames = ((OtpErlangList) cmdTuple
-					.elementAt(3)).elements();
-			SortField[] sortFields = new SortField[sortFieldNames.length];
-			for (int i = 0; i < sortFields.length; i++) {
-				sortFields[i] = this.translator
-						.createSortField((OtpErlangAtom) sortFieldNames[i]);
-			}
-			runMatch(queryString, pageSize, sortFields, from);
-			throw new OtpContinueException();
+			// {match, Query :: string(), PageSize :: integer(), SortFields,
+			// Filters}
+			try {
 
+				String queryString = ((OtpErlangString) cmdTuple.elementAt(1))
+						.stringValue();
+				int pageSize = ((OtpErlangLong) cmdTuple.elementAt(2))
+						.intValue();
+				OtpErlangObject[] sortFieldNames = ((OtpErlangList) cmdTuple
+						.elementAt(3)).elements();
+				SortField[] sortFields = new SortField[sortFieldNames.length];
+				for (int i = 0; i < sortFields.length; i++) {
+					sortFields[i] = this.translator
+							.createSortField((OtpErlangAtom) sortFieldNames[i]);
+				}
+				Filter filter = null;
+				if (cmdTuple.arity() > 4) {
+					OtpErlangObject[] filterDescriptors = ((OtpErlangList) cmdTuple
+							.elementAt(4)).elements();
+					if (filterDescriptors.length > 0) {
+						Filter[] filters = new FieldCacheTermsFilter[filterDescriptors.length];
+						for (int i = 0; i < filterDescriptors.length; i++) {
+							OtpErlangTuple fd = (OtpErlangTuple) filterDescriptors[i];
+							if (fd.arity() != 2) {
+								jlog.warning("Invalid filter description: "
+										+ fd);
+								throw new InvalidParameterException(
+										"Invalid filter description: " + fd);
+							}
+							OtpErlangAtom fieldName = (OtpErlangAtom) fd
+									.elementAt(0);
+							OtpErlangList fieldValues = (OtpErlangList) fd
+									.elementAt(1);
+							if (fieldValues.arity() == 0) {
+								jlog.warning("Invalid filter description: "
+										+ fd);
+								throw new OtpErlangException(
+										"Invalid filter description: " + fd);
+							}
+							filters[i] = this.translator.createFilter(
+									fieldName, fieldValues);
+						}
+						filter = new org.apache.lucene.search.ChainedFilter(
+								filters, ChainedFilter.AND);
+					}
+				}
+				runMatch(queryString, pageSize, sortFields, filter, from);
+				throw new OtpContinueException();
+			} catch (InvalidParameterException ipe) {
+				ipe.printStackTrace();
+				OtpErlangTuple reply = new OtpErlangTuple(
+						new OtpErlangObject[] { new OtpErlangAtom("error"),
+								new OtpErlangString(ipe.getMessage()) });
+				return reply;
+			} catch (ClassCastException cce) {
+				cce.printStackTrace();
+				OtpErlangTuple reply = new OtpErlangTuple(
+						new OtpErlangObject[] { new OtpErlangAtom("error"),
+								new OtpErlangString(cce.getMessage()) });
+				return reply;
+			} catch (UnsupportedFieldTypeException ufte) {
+				ufte.printStackTrace();
+				OtpErlangTuple reply = new OtpErlangTuple(
+						new OtpErlangObject[] { new OtpErlangAtom("error"),
+								new OtpErlangString(ufte.getMessage()) });
+				return reply;
+			}
 		} else if (cmdName.atomValue().equals("continue")) {
 			// {continue, Token :: binary(), PageSize :: integer()}
 			Object pageToken = ((OtpErlangBinary) cmdTuple.elementAt(1))
@@ -318,7 +375,7 @@ public class LuceneServer extends OtpGenServer {
 				true);
 
 		long t1 = System.nanoTime();
-		searcher.search(q, collector);
+		searcher.search(q, pageToken.getFilter(), collector);
 		long t2 = System.nanoTime();
 
 		topDocs = collector.topDocs(pageToken.getNextFirstHit() - 1);
@@ -422,14 +479,15 @@ public class LuceneServer extends OtpGenServer {
 	 *            Process expecting the response
 	 */
 	protected void runMatch(final String queryString, final int pageSize,
-			final SortField[] sortFields, final OtpErlangTuple from) {
+			final SortField[] sortFields, final Filter filter,
+			final OtpErlangTuple from) {
 		int threadCount = Thread.activeCount() - this.initialThreads;
 		jlog.info("Currently using " + threadCount + " threads");
 		if (threadCount <= this.allowedThreads) {
 			new Thread("query-runner") {
 				@Override
 				public void run() {
-					doRunMatch(queryString, pageSize, sortFields, from);
+					doRunMatch(queryString, pageSize, sortFields, filter, from);
 				}
 			}.start();
 		} else {
@@ -439,7 +497,7 @@ public class LuceneServer extends OtpGenServer {
 				Thread.sleep(500);
 			} catch (InterruptedException e) {
 			}
-			runMatch(queryString, pageSize, sortFields, from);
+			runMatch(queryString, pageSize, sortFields, filter, from);
 		}
 	}
 
@@ -454,12 +512,13 @@ public class LuceneServer extends OtpGenServer {
 	 *            Process expecting the response
 	 */
 	protected void doRunMatch(final String queryString, final int pageSize,
-			final SortField[] sortFields, final OtpErlangTuple from) {
+			final SortField[] sortFields, final Filter filter,
+			final OtpErlangTuple from) {
 		OtpErlangObject reply = null;
 		try {
 			reply = new OtpErlangTuple(new OtpErlangObject[] {
 					new OtpErlangAtom("ok"),
-					match(new LucenePageToken(queryString, sortFields),
+					match(new LucenePageToken(queryString, sortFields, filter),
 							pageSize) });
 		} catch (IOException ioe) {
 			jlog.severe("Couldn't search the index: " + ioe);
