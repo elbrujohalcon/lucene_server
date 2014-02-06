@@ -82,6 +82,46 @@ complete_coverage(_Config) ->
 	timer:sleep(500),
 	ok = gen_server:cast(lucene, ignored_cast),
 	{ok, state} = lucene:code_change(oldvsn, state, extra),
+
+	receive
+		_ -> ok
+	after 0 -> ok
+	end,
+
+	lucene_server:stop(),
+
+	OldPath = os:getenv("PATH"),
+	os:putenv("PATH", ""),
+
+	try
+		{error, {{shutdown,{failed_to_start_child,lucene,java_missing}},
+						 {lucene_server,start,[normal,[]]}}} = lucene_server:start()
+	after
+		os:putenv("PATH", OldPath)
+	end,
+
+	ThisNode = node(),
+	ThisNodeStr = atom_to_list(ThisNode),
+	meck:new(string, [unstick, passthrough]),
+	meck:expect(string, tokens,
+							fun(Node, "@") when Node == ThisNodeStr -> [];
+								 (X, Y) -> meck:passthrough([X, Y])
+							end),
+
+	try
+		{error,
+			{{shutdown,
+				{failed_to_start_child,lucene,
+					{bad_return_value,{bad_node_name,ThisNode}}}},
+		 	{lucene_server,start,[normal,[]]}}} = lucene_server:start()
+	after
+		meck:unload(string)
+	end,
+
+	timer:sleep(1000),
+
+	ok = lucene_server:start(),
+
 	LucenePath = filename:join(filename:dirname(code:priv_dir(lucene_server)), "ebin"),
 	try
 		true = code:del_path(LucenePath),
@@ -106,6 +146,7 @@ complete_coverage(_Config) ->
 		end,
 		lucene_server:start()
 	end,
+
 	ok.
 
 -spec stop(config()) -> _.

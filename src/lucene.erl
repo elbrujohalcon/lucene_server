@@ -102,7 +102,7 @@ del(Query) -> gen_server:cast(?LUCENE_SERVER, {del, normalize_unicode(Query)}).
 -spec init([]) -> {ok, state()}.
 init([]) ->
   case os:find_executable("java") of
-    [] ->
+    false ->
       throw({stop, java_missing});
     Java ->
       ThisNode = this_node(),

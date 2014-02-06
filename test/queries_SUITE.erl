@@ -85,6 +85,9 @@ rpc(_Config) ->
 
   {[], _} = lucene:match("i.erlang:\"queries_SUITE:rpc_not_exported\"", PageSize),
 
+  ALongName = [(I rem 10) + $a || I <- lists:seq(1,255)],
+  {[], _} = lucene:match("i.erlang:\"" ++ ALongName ++ ":" ++ ALongName ++ "\"", PageSize),
+
   lucene:clear().
 
 -spec distance(config()) -> _.
