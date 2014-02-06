@@ -200,61 +200,9 @@ public class DocumentTranslator {
 			OtpErlangList otpFieldValues) throws UnsupportedFieldTypeException {
 		String fieldName = otpFieldName.atomValue();
 		String[] fieldValues = new String[otpFieldValues.arity()];
-		jlog.warning("types: " + this.fields);
 		for (int i = 0; i < fieldValues.length; i++) {
-			FieldType type = this.getFieldType(fieldName);
-			try {
-				switch (type) {
-				case DOUBLE:
-					fieldValues[i] = ""
-							+ ((OtpErlangDouble) otpFieldValues.elementAt(i))
-									.doubleValue();
-					break;
-				case FLOAT:
-					fieldValues[i] = ""
-							+ ((OtpErlangDouble) otpFieldValues.elementAt(i))
-									.floatValue();
-					break;
-				case ATOM:
-					fieldValues[i] = ((OtpErlangAtom) otpFieldValues
-							.elementAt(i)).atomValue();
-					break;
-				case GEO:
-					OtpErlangTuple value = (OtpErlangTuple) otpFieldValues
-							.elementAt(i);
-					double lat = ((OtpErlangDouble) value.elementAt(1))
-							.doubleValue();
-					double lng = ((OtpErlangDouble) value.elementAt(2))
-							.doubleValue();
-					fieldValues[i] = GeoHashUtils.encode(lat, lng);
-					break;
-				case INT:
-					fieldValues[i] = ""
-							+ ((OtpErlangInt) otpFieldValues.elementAt(i))
-									.intValue();
-					break;
-				case LONG:
-					fieldValues[i] = ""
-							+ ((OtpErlangLong) otpFieldValues.elementAt(i))
-									.longValue();
-					break;
-				case STRING:
-					fieldValues[i] = ((OtpErlangString) otpFieldValues
-							.elementAt(i)).stringValue();
-					break;
-				default:
-					fieldValues[i] = otpFieldValues.elementAt(i).toString();
-					break;
-				}
-			} catch (OtpErlangRangeException e) {
-				throw new UnsupportedFieldTypeException(otpFieldValues
-						.elementAt(i).getClass());
-			} catch (ClassCastException cce) {
-				cce.printStackTrace();
-				throw new ClassCastException("Couldn't cast a "
-						+ otpFieldValues.elementAt(i).getClass() + " into "
-						+ type);
-			}
+			fieldValues[i] = ((OtpErlangString) otpFieldValues.elementAt(i))
+					.stringValue();
 		}
 		return new FieldCacheTermsFilter(fieldName, fieldValues);
 	}

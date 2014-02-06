@@ -40,6 +40,8 @@ complete_coverage(_Config) ->
 
 	OldWorkers = application:get_env(lucene_server, workers),
 	OldWorkersTimeout = application:get_env(lucene_server, workers_timeout),
+	OldThreads = application:get_env(lucene_server, java_threads),
+	OldArgs = application:get_env(lucene_server, java_args),
 	case OldWorkers of
 		undefined -> application:set_env(lucene_server, workers, 400);
 		_ -> application:unset_env(lucene_server, workers)
@@ -48,8 +50,24 @@ complete_coverage(_Config) ->
 		undefined -> application:set_env(lucene_server, workers_timeout, 5000);
 		_ -> application:unset_env(lucene_server, workers_timeout)
 	end,
+	case OldThreads of
+		undefined -> application:set_env(lucene_server, java_threads, 4);
+		_ -> application:unset_env(lucene_server, java_threads)
+	end,
+	case OldArgs of
+		undefined -> application:set_env(lucene_server, java_args, ["-Xmx128m"]);
+		_ -> application:unset_env(lucene_server, java_args)
+	end,
 
 	{error, {already_started, _}} = lucene_worker:start_pool(),
+
+	try lucene:match("x:x", 1, [], 0) of
+		R -> no_result = R
+	catch
+		_:E -> {timeout, _} = E
+	end,
+
+	{[],_} = lucene:match("no:match", 1, [], infinity),
 
 	case OldWorkers of
 		undefined -> application:unset_env(lucene_server, workers);
@@ -78,6 +96,14 @@ complete_coverage(_Config) ->
 	after
 		code:add_patha(LucenePath),
 		whereis(lucene) =/= undefined andalso exit(whereis(lucene), kill),
+		case OldThreads of
+			undefined -> application:unset_env(lucene_server, java_threads);
+			{ok, OT} -> application:set_env(lucene_server, java_threads, OT)
+		end,
+		case OldArgs of
+			undefined -> application:unset_env(lucene_server, java_args);
+			{ok, OA} -> application:set_env(lucene_server, java_args, OA)
+		end,
 		lucene_server:start()
 	end,
 	ok.

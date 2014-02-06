@@ -1,14 +1,14 @@
 %% @hidden
 -module(queries_SUITE).
 
--export([all/0, distance/1, rpc/1, rpc_return/2, rpc_echo/1, hsin/2, init_per_suite/1, end_per_suite/1]).
+-export([all/0, distance/1, rpc/1, filters/1, rpc_return/2, rpc_echo/1, rpc_timeout/1, hsin/2, init_per_suite/1, end_per_suite/1]).
 
 -include("lucene.hrl").
 
 -type config() :: [{atom(), term()}].
 
 -spec all() -> [atom()].
-all() -> [distance, rpc].
+all() -> [distance, rpc, filters].
 
 -spec init_per_suite(config()) -> config().
 init_per_suite(Config) ->
@@ -19,6 +19,47 @@ init_per_suite(Config) ->
 -spec end_per_suite(config()) -> config().
 end_per_suite(Config) ->
   Config.
+
+-spec filters(config()) -> _.
+filters(_Config) ->
+  PageSize = 5,
+
+  ok = lucene:clear(),
+  Docs = [[{x, x}, {i, integer_to_list(I-1)}, {s, [$a+I]}] || I <- lists:seq(PageSize*2, 1, -1)],
+  ok = lucene:add(Docs),
+
+  {_, M0} = lucene:match("x:x", PageSize, [], undefined),
+  10 = proplists:get_value(total_hits, M0),
+  {_, M1} = lucene:match("x:x", PageSize, [], []),
+  10 = proplists:get_value(total_hits, M1),
+  {_, M2} = lucene:match("x:x", PageSize, [], [{x, ["x"]}]),
+  10 = proplists:get_value(total_hits, M2),
+  {_, M3} = lucene:match("i:[1 TO 3]", PageSize, [], [{x, ["x"]}]),
+  3 = proplists:get_value(total_hits, M3),
+  {_, M4} = lucene:match("x:x", PageSize, [], [{s, ["b", "c", "d"]}]),
+  3 = proplists:get_value(total_hits, M4),
+  {_, M5} = lucene:match("x:x", PageSize, [], [{i, ["1", "2", "3"]}, {x, ["x", "y"]}]),
+  3 = proplists:get_value(total_hits, M5),
+  {_, M6} = lucene:match("x:x", PageSize, [], [{i, ["1", "2", "3"]}, {s, ["c"]}]),
+  1 = proplists:get_value(total_hits, M6),
+
+  {_, M7} = lucene:match("x:x", PageSize, [], [{i, ["1", "2", "3", "4", "5", "6"]}]),
+  6 = proplists:get_value(total_hits, M7),
+  Cont = proplists:get_value(next_page, M7),
+  {[_], M8} = lucene:continue(Cont, PageSize),
+  6 = proplists:get_value(total_hits, M8),
+  6 = proplists:get_value(first_hit, M8),
+
+  try lucene:match("x:x", PageSize, [], [{i, not_a_string}]) of
+    R -> no_result = R
+  catch
+    _:_ -> ok
+  end,
+
+  lucene:clear().
+
+-spec rpc_timeout([undefined | integer()]) -> term().
+rpc_timeout(Is) -> timer:sleep(5000), rpc_echo(Is).
 
 -spec rpc_return(term(), [undefined | integer()]) -> term().
 rpc_return(Return, Is) -> [Return || _ <- Is].
@@ -39,6 +80,8 @@ rpc(_Config) ->
   {Rs, M} = lucene:match("i.erlang:\"queries_SUITE:rpc_echo\"", PageSize),
   5 = proplists:get_value(total_hits, M),
   Docs = [lists:keydelete('`score', 1, R) || R <- Rs],
+
+  {[], _} = lucene:match("i.erlang:\"queries_SUITE:rpc_timeout\"", PageSize),
 
   {[], _} = lucene:match("i.erlang:\"queries_SUITE:rpc_not_exported\"", PageSize),
 

@@ -33,7 +33,7 @@
 -type field_key() :: atom()|binary()|string().
 -type field_value() :: number() | atom() | string() | geo().
 -type doc() :: [{field_key(), field_value()},...].
--type filter() :: [{field_key(), [field_value()]}, ...].
+-type filter() :: [{field_key(), [string()]}, ...].
 -export_type([geo/0, field_key/0, field_value/0, doc/0, metadata/0, page_token/0]).
 
 %%-------------------------------------------------------------------
@@ -121,7 +121,7 @@ init([]) ->
           end,
       Port =
         erlang:open_port({spawn_executable, Java},
-                         [{line,1000}, stderr_to_stdout,
+                         [{line,256}, stderr_to_stdout,
                           {args, JavaArgs ++ ["-classpath", Classpath,
                                   "com.tigertext.lucene.LuceneNode",
                                   ThisNode, JavaNode, erlang:get_cookie(),
