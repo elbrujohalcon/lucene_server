@@ -11,6 +11,8 @@ import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.Fieldable;
 import org.apache.lucene.document.NumericField;
+import org.apache.lucene.search.FieldCacheTermsFilter;
+import org.apache.lucene.search.Filter;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.spatial.geohash.GeoHashUtils;
@@ -36,19 +38,19 @@ import com.ericsson.otp.erlang.OtpErlangTuple;
  */
 @SuppressWarnings("deprecation")
 public class DocumentTranslator {
-	private static final Logger		jlog		= Logger.getLogger(DocumentTranslator.class
-														.getName());
+	private static final Logger jlog = Logger
+			.getLogger(DocumentTranslator.class.getName());
 
 	/**
 	 * Highest possible tier for GEO fields
 	 */
-	public static final int			MAX_TIER	= 20;
+	public static final int MAX_TIER = 20;
 	/**
 	 * Lowest possible tier for GEO fields
 	 */
-	public static final int			MIN_TIER	= 4;
+	public static final int MIN_TIER = 4;
 
-	private Map<String, FieldType>	fields;
+	private Map<String, FieldType> fields;
 
 	/**
 	 * @author Fernando Benavides <elbrujohalcon@inaka.net> Allowed field types
@@ -99,7 +101,7 @@ public class DocumentTranslator {
 			super("Unsupported field type: " + class1);
 		}
 
-		private static final long	serialVersionUID	= 8966657853257773634L;
+		private static final long serialVersionUID = 8966657853257773634L;
 	}
 
 	/**
@@ -186,6 +188,23 @@ public class DocumentTranslator {
 			return new SortField(fieldName + "`sort",
 					new MissingLastStringOrdValComparatorSource());
 		}
+	}
+
+	/**
+	 * Returns a filter for the specified field and values
+	 * 
+	 * @return a FieldCacheTermsFilter
+	 * @throws UnsupportedFieldTypeException
+	 */
+	public Filter createFilter(OtpErlangAtom otpFieldName,
+			OtpErlangList otpFieldValues) throws UnsupportedFieldTypeException {
+		String fieldName = otpFieldName.atomValue();
+		String[] fieldValues = new String[otpFieldValues.arity()];
+		for (int i = 0; i < fieldValues.length; i++) {
+			fieldValues[i] = ((OtpErlangString) otpFieldValues.elementAt(i))
+					.stringValue();
+		}
+		return new FieldCacheTermsFilter(fieldName, fieldValues);
 	}
 
 	/**

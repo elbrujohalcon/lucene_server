@@ -19,7 +19,7 @@
 
 -export([process/0]).
 -export([add/1, del/1, clear/0, save/1, stop/0]).
--export([match/2, match/3, match/4, continue/2, continue/3]).
+-export([match/2, match/3, match/4, match/5, continue/2, continue/3]).
 
 -record(state, {java_port :: port(),
                 java_node :: atom()}).
@@ -33,6 +33,7 @@
 -type field_key() :: atom()|binary()|string().
 -type field_value() :: number() | atom() | string() | geo().
 -type doc() :: [{field_key(), field_value()},...].
+-type filter() :: [{field_key(), [string()]}, ...].
 -export_type([geo/0, field_key/0, field_value/0, doc/0, metadata/0, page_token/0]).
 
 %%-------------------------------------------------------------------
@@ -52,11 +53,18 @@ match(Query, PageSize) -> match(Query, PageSize, []).
 
 %% @equiv match(Query, PageSize, SortFields, infinity)
 -spec match(string(), pos_integer(), [atom()]) -> {[doc()], metadata()}.
-match(Query, PageSize, SortFields) -> match(Query, PageSize, SortFields, ?CALL_TIMEOUT).
+match(Query, PageSize, SortFields) -> match(Query, PageSize, SortFields, undefined, ?CALL_TIMEOUT).
 
 %% @doc Runs a query against the lucene server
--spec match(string(), pos_integer(), [atom()], infinity | pos_integer()) -> {[doc()], metadata()}.
-match(Query, PageSize, SortFields, Timeout) -> make_call({match, normalize_unicode(Query), PageSize, SortFields}, Timeout).
+-spec match(string(), pos_integer(), [atom()], infinity | pos_integer() | [filter()]) -> {[doc()], metadata()}.
+match(Query, PageSize, SortFields, infinity) -> match(Query, PageSize, SortFields, undefined, infinity);
+match(Query, PageSize, SortFields, Timeout) when is_integer(Timeout) -> match(Query, PageSize, SortFields, undefined, Timeout);
+match(Query, PageSize, SortFields, Filters) -> match(Query, PageSize, SortFields, Filters, ?CALL_TIMEOUT).
+
+%% @doc Runs a query against the lucene server
+-spec match(string(), pos_integer(), [atom()], undefined | [filter()], infinity | pos_integer()) -> {[doc()], metadata()}.
+match(Query, PageSize, SortFields, undefined, Timeout) -> make_call({match, normalize_unicode(Query), PageSize, SortFields}, Timeout);
+match(Query, PageSize, SortFields, Filters, Timeout) -> make_call({match, normalize_unicode(Query), PageSize, SortFields, Filters}, Timeout).
 
 %% @equiv continue(PageToken, PageSize, infinity)
 -spec continue(page_token(), pos_integer()) -> {[string()], metadata()}.
@@ -94,7 +102,7 @@ del(Query) -> gen_server:cast(?LUCENE_SERVER, {del, normalize_unicode(Query)}).
 -spec init([]) -> {ok, state()}.
 init([]) ->
   case os:find_executable("java") of
-    [] ->
+    false ->
       throw({stop, java_missing});
     Java ->
       ThisNode = this_node(),
@@ -113,7 +121,7 @@ init([]) ->
           end,
       Port =
         erlang:open_port({spawn_executable, Java},
-                         [{line,1000}, stderr_to_stdout,
+                         [{line,256}, stderr_to_stdout,
                           {args, JavaArgs ++ ["-classpath", Classpath,
                                   "com.tigertext.lucene.LuceneNode",
                                   ThisNode, JavaNode, erlang:get_cookie(),
@@ -170,9 +178,6 @@ priv_dir(App) ->
       lager:info("Couldn't find priv dir for lucene_server, using ./priv"), "./priv";
     PrivDir -> filename:absname(PrivDir)
   end.
-
-test_priv_path(_, {ok, _}, Absolute_Path) -> Absolute_Path;
-test_priv_path(Path, {error, _}, _) -> filename:absname(code:lib_dir() ++ Path).
 
 this_node() -> atom_to_list(node()).
 

@@ -40,6 +40,8 @@ complete_coverage(_Config) ->
 
 	OldWorkers = application:get_env(lucene_server, workers),
 	OldWorkersTimeout = application:get_env(lucene_server, workers_timeout),
+	OldThreads = application:get_env(lucene_server, java_threads),
+	OldArgs = application:get_env(lucene_server, java_args),
 	case OldWorkers of
 		undefined -> application:set_env(lucene_server, workers, 400);
 		_ -> application:unset_env(lucene_server, workers)
@@ -48,8 +50,24 @@ complete_coverage(_Config) ->
 		undefined -> application:set_env(lucene_server, workers_timeout, 5000);
 		_ -> application:unset_env(lucene_server, workers_timeout)
 	end,
+	case OldThreads of
+		undefined -> application:set_env(lucene_server, java_threads, 4);
+		_ -> application:unset_env(lucene_server, java_threads)
+	end,
+	case OldArgs of
+		undefined -> application:set_env(lucene_server, java_args, ["-Xmx128m"]);
+		_ -> application:unset_env(lucene_server, java_args)
+	end,
 
 	{error, {already_started, _}} = lucene_worker:start_pool(),
+
+	try lucene:match("x:x", 1, [], 0) of
+		R -> no_result = R
+	catch
+		_:E -> {timeout, _} = E
+	end,
+
+	{[],_} = lucene:match("no:match", 1, [], infinity),
 
 	case OldWorkers of
 		undefined -> application:unset_env(lucene_server, workers);
@@ -64,6 +82,46 @@ complete_coverage(_Config) ->
 	timer:sleep(500),
 	ok = gen_server:cast(lucene, ignored_cast),
 	{ok, state} = lucene:code_change(oldvsn, state, extra),
+
+	receive
+		_ -> ok
+	after 0 -> ok
+	end,
+
+	lucene_server:stop(),
+
+	OldPath = os:getenv("PATH"),
+	os:putenv("PATH", ""),
+
+	try
+		{error, {{shutdown,{failed_to_start_child,lucene,java_missing}},
+						 {lucene_server,start,[normal,[]]}}} = lucene_server:start()
+	after
+		os:putenv("PATH", OldPath)
+	end,
+
+	ThisNode = node(),
+	ThisNodeStr = atom_to_list(ThisNode),
+	meck:new(string, [unstick, passthrough]),
+	meck:expect(string, tokens,
+							fun(Node, "@") when Node == ThisNodeStr -> [];
+								 (X, Y) -> meck:passthrough([X, Y])
+							end),
+
+	try
+		{error,
+			{{shutdown,
+				{failed_to_start_child,lucene,
+					{bad_return_value,{bad_node_name,ThisNode}}}},
+		 	{lucene_server,start,[normal,[]]}}} = lucene_server:start()
+	after
+		meck:unload(string)
+	end,
+
+	timer:sleep(1000),
+
+	ok = lucene_server:start(),
+
 	LucenePath = filename:join(filename:dirname(code:priv_dir(lucene_server)), "ebin"),
 	try
 		true = code:del_path(LucenePath),
@@ -78,8 +136,17 @@ complete_coverage(_Config) ->
 	after
 		code:add_patha(LucenePath),
 		whereis(lucene) =/= undefined andalso exit(whereis(lucene), kill),
+		case OldThreads of
+			undefined -> application:unset_env(lucene_server, java_threads);
+			{ok, OT} -> application:set_env(lucene_server, java_threads, OT)
+		end,
+		case OldArgs of
+			undefined -> application:unset_env(lucene_server, java_args);
+			{ok, OA} -> application:set_env(lucene_server, java_args, OA)
+		end,
 		lucene_server:start()
 	end,
+
 	ok.
 
 -spec stop(config()) -> _.
