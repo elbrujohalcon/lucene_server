@@ -6,7 +6,7 @@
 -module(lucene_bench).
 -author('elbrujohalcon@inaka.net').
 
--export([add/2, match/6, just_match/4, concurrency/6]).
+-export([add/2, match/7, just_match/5, concurrency/7]).
 -export([sleep/2]).
 
 -spec add(pos_integer(), pos_integer()) -> float().
@@ -21,18 +21,18 @@ add(NumDocs, NumFields) ->
 	lager:notice("Result: ~p~n", [Result]),
 	Time/1000000.
 
--spec match(pos_integer(), pos_integer(), pos_integer(), pos_integer(), string(), pos_integer()) -> {float(), float()}.
-match(N, C, NumDocs, NumFields, Query, PageSize) ->
+-spec match(pos_integer(), pos_integer(), pos_integer(), pos_integer(), string(), [{atom(), [string()]}], pos_integer()) -> {float(), float()}.
+match(N, C, NumDocs, NumFields, Query, Filters, PageSize) ->
 	lucene:clear(),
 	add(NumDocs, NumFields),
-	just_match(N, C, Query, PageSize).
+	just_match(N, C, Query, Filters, PageSize).
 
--spec just_match(pos_integer(), pos_integer(), string(), pos_integer()) -> {float(), float()}.
-just_match(N, C, Query, PageSize) ->
+-spec just_match(pos_integer(), pos_integer(), string(), [{atom(), [string()]}], pos_integer()) -> {float(), float()}.
+just_match(N, C, Query, Filters, PageSize) ->
 	Self = self(),
 	[begin
 		timer:sleep(1000),
-		spawn(fun() -> match(C, Query, PageSize, Self) end)
+		spawn(fun() -> match(C, Query, Filters, PageSize, Self) end)
 	 end || _ <- lists:seq(1, N, C)],
 	Timeout = trunc(N/C) * 1000 + 60000,
 	Results =
@@ -47,10 +47,10 @@ just_match(N, C, Query, PageSize) ->
 	GenMax = lists:max([M || {_, M} <- Results]),
 	{GenAvg, GenMax}.
 
-match(C, Query, PageSize, Parent) ->
+match(C, Query, Filters, PageSize, Parent) ->
 	Self = self(),
 	Pids =
-		[spawn(fun() -> receive P -> P ! timer:tc(lucene, match, [Query, PageSize]) end end)
+		[spawn(fun() -> receive P -> P ! timer:tc(lucene, match, [Query, PageSize, [], Filters]) end end)
 	 	 || _ <- lists:seq(1, C)],
 	[Pid ! Self || Pid <- Pids],
 	Times =
@@ -62,8 +62,8 @@ match(C, Query, PageSize, Parent) ->
 		 end || _ <- lists:seq(1, C)],
 	Parent ! {lists:sum(Times), hd(lists:reverse(lists:sort(Times)))}.
 
--spec concurrency(pos_integer(), pos_integer(), pos_integer(), string(), pos_integer(), pos_integer()) -> {float(), [float()]}.
-concurrency(NumDocs, NumFields, N, Query, CTop, CStep) ->
+-spec concurrency(pos_integer(), pos_integer(), pos_integer(), string(), [{atom(), [string()]}], pos_integer(), pos_integer()) -> {float(), [float()]}.
+concurrency(NumDocs, NumFields, N, Query, Filters, CTop, CStep) ->
 	io:format("Clearing the index...~n"),
 	lucene:clear(),
 	io:format("Filling the index...~n"),
@@ -74,7 +74,7 @@ concurrency(NumDocs, NumFields, N, Query, CTop, CStep) ->
 		fun(I) ->
 			Field = integer_to_list((I rem NumFields) + 1),
 			{Avg, Max} =
-				lucene_bench:just_match(N, I, Query ++ " AND Field" ++ Field ++ ":F" ++ Field ++ "*", 10),
+				lucene_bench:just_match(N, I, Query ++ " AND Field" ++ Field ++ ":F" ++ Field ++ "*", Filters, 10),
 			io:format("~3b: ~..3f / ~..3f~n", [I, Avg, Max])
 		end, lists:seq(CStep, CTop, CStep)).
 
