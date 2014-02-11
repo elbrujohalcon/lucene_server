@@ -42,7 +42,6 @@ public class LuceneNode {
 			if (args.length >= 5)
 				System.getProperties().setProperty("OtpConnection.trace",
 						args[4]);
-			jlog.warning("OtpConnection.trace = " + args[4]);
 			NODE = args.length >= 3 ? new OtpNode(nodeName, args[2])
 					: new OtpNode(nodeName);
 			PEER = peerName;
