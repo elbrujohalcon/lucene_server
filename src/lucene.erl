@@ -119,13 +119,19 @@ init([]) ->
               {ok, Args} -> Args;
               undefined -> []
           end,
+      TraceLevel =
+          case application:get_env(lucene_server, java_trace_level) of
+              {ok, TL} -> TL;
+              undefined -> "0"
+          end,
       Port =
         erlang:open_port({spawn_executable, Java},
                          [{line,256}, stderr_to_stdout,
                           {args, JavaArgs ++ ["-classpath", Classpath,
                                   "com.tigertext.lucene.LuceneNode",
                                   ThisNode, JavaNode, erlang:get_cookie(),
-                                  integer_to_list(AllowedThreads)]}]),
+                                  integer_to_list(AllowedThreads),
+                                  TraceLevel]}]),
       wait_for_ready(#state{java_port = Port, java_node = JavaNode})
   end.
 

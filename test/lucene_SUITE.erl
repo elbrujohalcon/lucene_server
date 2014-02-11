@@ -42,6 +42,7 @@ complete_coverage(_Config) ->
 	OldWorkersTimeout = application:get_env(lucene_server, workers_timeout),
 	OldThreads = application:get_env(lucene_server, java_threads),
 	OldArgs = application:get_env(lucene_server, java_args),
+	OldTrace = application:get_env(lucene_server, java_trace_level),
 	case OldWorkers of
 		undefined -> application:set_env(lucene_server, workers, 400);
 		_ -> application:unset_env(lucene_server, workers)
@@ -57,6 +58,10 @@ complete_coverage(_Config) ->
 	case OldArgs of
 		undefined -> application:set_env(lucene_server, java_args, ["-Xmx128m"]);
 		_ -> application:unset_env(lucene_server, java_args)
+	end,
+	case OldTrace of
+		undefined -> application:set_env(lucene_server, java_trace_level, "4");
+		_ -> application:unset_env(lucene_server, java_trace_level)
 	end,
 
 	{error, {already_started, _}} = lucene_worker:start_pool(),
@@ -143,6 +148,10 @@ complete_coverage(_Config) ->
 		case OldArgs of
 			undefined -> application:unset_env(lucene_server, java_args);
 			{ok, OA} -> application:set_env(lucene_server, java_args, OA)
+		end,
+		case OldTrace of
+			undefined -> application:unset_env(lucene_server, java_trace_level);
+			{ok, TL} -> application:set_env(lucene_server, java_trace_level, TL)
 		end,
 		lucene_server:start()
 	end,
