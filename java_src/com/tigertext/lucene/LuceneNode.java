@@ -12,20 +12,20 @@ import com.ericsson.otp.stdlib.OtpGenServer;
  * @author Fernando Benavides <elbrujohalcon@inaka.net>
  */
 public class LuceneNode {
-	private static final Logger	jlog	= Logger.getLogger(LuceneNode.class
-												.getName());
+	private static final Logger jlog = Logger.getLogger(LuceneNode.class
+			.getName());
 
-	private static int			ALLOWED_THREADS;
+	private static int ALLOWED_THREADS;
 
 	/**
 	 * This Erlang node
 	 */
-	public static OtpNode		NODE;
+	public static OtpNode NODE;
 
 	/**
 	 * Peer node name
 	 */
-	public static String		PEER;
+	public static String PEER;
 
 	/**
 	 * Start up function
@@ -39,6 +39,9 @@ public class LuceneNode {
 		String nodeName = args.length >= 2 ? args[1]
 				: "lucene_server_java@localhost";
 		try {
+			if (args.length >= 4)
+				System.getProperties().setProperty("OtpConnection.trace",
+						args[3]);
 			NODE = args.length >= 3 ? new OtpNode(nodeName, args[2])
 					: new OtpNode(nodeName);
 			PEER = peerName;

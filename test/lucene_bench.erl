@@ -14,7 +14,7 @@ add(NumDocs, NumFields) ->
 	Docs =
 		[	[{list_to_atom("Field" ++ integer_to_list(FieldNum)),
 			  "F" ++ integer_to_list(FieldNum) ++ " D" ++ integer_to_list(DocNum)}
-			 || FieldNum <- lists:seq(1, NumFields)]
+			 || FieldNum <- lists:seq(1, NumFields)] ++ [{id, DocNum}, {group, [$G|integer_to_list(DocNum rem NumFields)]}]
 		 || DocNum <- lists:seq(1, NumDocs)],
 	ok = lucene:add(Docs), %% It's a cast
 	{Time, Result} = timer:tc(lucene, match, ["Field1:F1*", 1]),
