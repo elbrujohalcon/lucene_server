@@ -1,14 +1,15 @@
 %% @hidden
 -module(queries_SUITE).
 
--export([all/0, distance/1, rpc/1, filters/1, rpc_return/2, rpc_echo/1, rpc_timeout/1, hsin/2, too_long/1, init_per_suite/1, end_per_suite/1]).
+-export([all/0, distance/1, rpc/1, filters/1, sorting/1, too_long/1, init_per_suite/1, end_per_suite/1]).
+-export([rpc_return/2, rpc_echo/1, rpc_timeout/1, hsin/2]).
 
 -include("lucene.hrl").
 
 -type config() :: [{atom(), term()}].
 
 -spec all() -> [atom()].
-all() -> [distance, rpc, filters, too_long].
+all() -> [distance, rpc, filters, too_long, sorting].
 
 -spec init_per_suite(config()) -> config().
 init_per_suite(Config) ->
@@ -19,6 +20,59 @@ init_per_suite(Config) ->
 -spec end_per_suite(config()) -> config().
 end_per_suite(Config) ->
   Config.
+
+-spec sorting(config()) -> _.
+sorting(_Config) ->
+  PageSize = 25,
+
+  Sorter =
+    fun
+      ([F1, F2]) ->
+        fun(A, B) ->
+          proplists:get_value(F1, A) < proplists:get_value(F1, B)
+          orelse
+            (proplists:get_value(F1, A) == proplists:get_value(F1, B) andalso
+              proplists:get_value(F2, A) =< proplists:get_value(F2, B))
+        end;
+      (F1) ->
+        fun(A, B) ->
+          proplists:get_value(F1, A) =< proplists:get_value(F1, B)
+        end
+    end,
+
+  ok = lucene:clear(),
+  Docs = [[{i, I}, {s, [$a + (I rem 5)]}] || I <- lists:seq(PageSize, 1, -1)],
+  ok = lucene:add(Docs),
+
+  SortedByI = lists:sort(Sorter(i), Docs),
+  SortedByS = lists:sort(Sorter(s), Docs),
+  SortedBySI = lists:sort(Sorter([s,i]), Docs),
+
+  {Rs0, _} = lucene:match("i:[* TO *]", PageSize, [i]),
+  SortedByI = [lists:keydelete('`score', 1, R) || R <- Rs0],
+
+  {Rs1, _} = lucene:match("i:[* TO *]", PageSize, [s]),
+  SortedByS = [lists:keydelete('`score', 1, R) || R <- Rs1],
+
+  {Rs2, _} = lucene:match("i:[* TO *]", PageSize, [i,s]),
+  SortedByI = [lists:keydelete('`score', 1, R) || R <- Rs2],
+
+  {Rs3, _} = lucene:match("i:[* TO *]", PageSize, [s,i]),
+  SortedBySI = [lists:keydelete('`score', 1, R) || R <- Rs3],
+
+  {Rs4, _} = lucene:match("i:[* TO *]", PageSize, [{i, desc}]),
+  SortedByI = lists:reverse([lists:keydelete('`score', 1, R) || R <- Rs4]),
+
+  {Rs5, _} = lucene:match("i:[* TO *]", PageSize, [{s, desc}]),
+  SortedBySI = lists:reverse([lists:keydelete('`score', 1, R) || R <- Rs5]),
+
+  {Rs6, _} = lucene:match("i:[* TO *]", PageSize, [i, {s, desc}]),
+  SortedByI = [lists:keydelete('`score', 1, R) || R <- Rs6],
+
+  {Rs7, _} = lucene:match("i:[* TO *]", PageSize, [{i, desc}, {s, desc}]),
+  SortedByI = lists:reverse([lists:keydelete('`score', 1, R) || R <- Rs7]),
+
+  lucene:clear().
 
 -spec too_long(config()) -> _.
 too_long(_Config) ->

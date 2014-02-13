@@ -165,28 +165,37 @@ public class DocumentTranslator {
 	/**
 	 * Creates a new {@link SortField}
 	 * 
-	 * @param otpFieldName
-	 *            Field Name
+	 * @param sortField
+	 *            Field Name and direction
 	 * @return a sorting field
 	 */
-	public SortField createSortField(OtpErlangAtom otpFieldName) {
-		String fieldName = otpFieldName.atomValue();
+	public SortField createSortField(OtpErlangObject sortField) {
+		String fieldName = "";
+		boolean reverse = false;
+		if (sortField instanceof OtpErlangAtom) {
+			fieldName = ((OtpErlangAtom) sortField).atomValue();
+		} else {
+			OtpErlangTuple fieldTuple = (OtpErlangTuple) sortField;
+			fieldName = ((OtpErlangAtom) fieldTuple.elementAt(0)).atomValue();
+			reverse = ((OtpErlangAtom) fieldTuple.elementAt(1)).atomValue()
+					.equals("desc");
+		}
 		switch (this.getFieldType(fieldName)) {
 		case DOUBLE:
-			return new SortField(fieldName, SortField.DOUBLE)
+			return new SortField(fieldName, SortField.DOUBLE, reverse)
 					.setMissingValue(Double.POSITIVE_INFINITY);
 		case FLOAT:
-			return new SortField(fieldName, SortField.FLOAT)
+			return new SortField(fieldName, SortField.FLOAT, reverse)
 					.setMissingValue(Float.POSITIVE_INFINITY);
 		case INT:
-			return new SortField(fieldName, SortField.INT)
+			return new SortField(fieldName, SortField.INT, reverse)
 					.setMissingValue(Integer.MAX_VALUE);
 		case LONG:
-			return new SortField(fieldName, SortField.LONG)
+			return new SortField(fieldName, SortField.LONG, reverse)
 					.setMissingValue(Long.MAX_VALUE);
 		default:
 			return new SortField(fieldName + "`sort",
-					new MissingLastStringOrdValComparatorSource());
+					new MissingLastStringOrdValComparatorSource(), reverse);
 		}
 	}
 

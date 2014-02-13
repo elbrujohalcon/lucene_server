@@ -170,7 +170,7 @@ public class LuceneServer extends OtpGenServer {
 				SortField[] sortFields = new SortField[sortFieldNames.length];
 				for (int i = 0; i < sortFields.length; i++) {
 					sortFields[i] = this.translator
-							.createSortField((OtpErlangAtom) sortFieldNames[i]);
+							.createSortField(sortFieldNames[i]);
 				}
 				Filter filter = null;
 				if (cmdTuple.arity() > 4) {
