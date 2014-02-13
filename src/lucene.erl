@@ -64,7 +64,7 @@ match(Query, PageSize, SortFields, Filters) -> match(Query, PageSize, SortFields
 %% @doc Runs a query against the lucene server
 -spec match(string(), pos_integer(), [atom()], undefined | [filter()], infinity | pos_integer()) -> {[doc()], metadata()}.
 match(Query, PageSize, SortFields, undefined, Timeout) -> make_call({match, normalize_unicode(Query), PageSize, SortFields}, Timeout);
-match(Query, PageSize, SortFields, Filters, Timeout) -> make_call({match, normalize_unicode(Query), PageSize, SortFields, Filters}, Timeout).
+match(Query, PageSize, SortFields, Filters, Timeout) -> make_call({match, normalize_unicode(Query), PageSize, SortFields, normalize_filters(Filters)}, Timeout).
 
 %% @equiv continue(PageToken, PageSize, infinity)
 -spec continue(page_token(), pos_integer()) -> {[string()], metadata()}.
@@ -240,3 +240,10 @@ wait_for_ready(State = #state{java_port = Port}) ->
           {stop, Reason}
       end
   end.
+
+normalize_filters(Filters) ->
+  Normalized = [{K, normalize_filter_values(Vs)} || {K, Vs} <- Filters],
+  [{K, Vs} || {K, Vs} <- Normalized, [] /= Vs].
+
+normalize_filter_values(Vs) ->
+  lists:filter(fun(V) -> [] /= V end, Vs).
