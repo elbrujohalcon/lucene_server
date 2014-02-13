@@ -199,8 +199,11 @@ public class LuceneServer extends OtpGenServer {
 							filters[i] = this.translator.createFilter(
 									fieldName, fieldValues);
 						}
-						filter = new org.apache.lucene.search.ChainedFilter(
-								filters, ChainedFilter.AND);
+						if (filters.length == 1)
+							filter = filters[0];
+						else
+							filter = new org.apache.lucene.search.ChainedFilter(
+									filters, ChainedFilter.AND);
 					}
 				}
 				runMatch(queryString, pageSize, sortFields, filter, from);

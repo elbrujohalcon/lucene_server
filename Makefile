@@ -33,12 +33,12 @@ run: erl
 test: erl
 	mkdir -p log/ct
 	mkdir -p log/java
-	java -classpath ${CLASSPATH} net.sourceforge.cobertura.instrument.Main bin
-	jar cf priv/lucene-server.jar -C bin .
+#	java -classpath ${CLASSPATH} net.sourceforge.cobertura.instrument.Main bin
+#	jar cf priv/lucene-server.jar -C bin .
 	./rebar skip_deps=true ct -vvv
-	java -classpath ${CLASSPATH} net.sourceforge.cobertura.reporting.Main --destination log/java java_src
+#	java -classpath ${CLASSPATH} net.sourceforge.cobertura.reporting.Main --destination log/java java_src
 	open log/ct/index.html
-	open log/java/index.html
+#	open log/java/index.html
 
 doc: erl
 	./rebar skip_deps=true doc
