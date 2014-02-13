@@ -157,12 +157,12 @@ public class LuceneServer extends OtpGenServer {
 			return super.getSelf();
 
 		} else if (cmdName.atomValue().equals("match")) {
-			// {match, Query :: string(), PageSize :: integer(), SortFields,
+			// {match, Query :: binary(), PageSize :: integer(), SortFields,
 			// Filters}
 			try {
 
-				String queryString = ((OtpErlangString) cmdTuple.elementAt(1))
-						.stringValue();
+				String queryString = new String(
+						((OtpErlangBinary) cmdTuple.elementAt(1)).binaryValue());
 				int pageSize = ((OtpErlangLong) cmdTuple.elementAt(2))
 						.intValue();
 				OtpErlangObject[] sortFieldNames = ((OtpErlangList) cmdTuple
@@ -250,11 +250,13 @@ public class LuceneServer extends OtpGenServer {
 			clear();
 		} else if (cmdName.equals("del")) {
 			// {del, Query :: string()}
-			if (cmdTuple.elementAt(1) instanceof OtpErlangString) {
-				del(((OtpErlangString) cmdTuple.elementAt(1)).stringValue());
+			if (cmdTuple.elementAt(1) instanceof OtpErlangBinary) {
+				String queryString = new String(
+						((OtpErlangBinary) cmdTuple.elementAt(1)).binaryValue());
+				del(queryString);
 			} else {
 				jlog.severe("Received " + cmdTuple.elementAt(1)
-						+ " instead of a string in " + cmdTuple);
+						+ " instead of a binary in " + cmdTuple);
 				throw new OtpStopException();
 			}
 		} else if (cmdName.equals("add")) {
