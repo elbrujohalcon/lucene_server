@@ -177,6 +177,13 @@ keys(_Config) ->
 
 -spec add_del_clear(config()) -> _.
 add_del_clear(_Config) ->
+	LongValue = [$a + I rem 20 || I <- lists:seq(1, 65536)],
+	try lucene:add([[{k, LongValue}]]) of
+		R -> no_result = R
+	catch
+		E -> {invalid_string, LongValue} = E
+	end,
+
 	lucene:add([[{i, I}] || I <- lists:seq(1, 3)]),
 
 	{R0, M0} = lucene:match("i:[1 TO 3]", 2),

@@ -8,6 +8,11 @@
 
 -export([add/2, match/7, just_match/5, concurrency/7]).
 -export([sleep/2]).
+-export([exactly/2]).
+
+-spec exactly(X, [X]) -> [float() | false].
+exactly(X, L) ->
+	lists:map(fun(Y) -> case Y of X -> 1.0; Y -> false end end, L).
 
 -spec add(pos_integer(), pos_integer()) -> float().
 add(NumDocs, NumFields) ->

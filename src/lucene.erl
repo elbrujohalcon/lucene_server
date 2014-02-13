@@ -196,19 +196,21 @@ java_node() ->
 make_call(Call, Timeout) ->
   case gen_server:call(?LUCENE_SERVER, Call, Timeout) of
     {ok, Result} -> Result;
-    {error, Error} -> throw(Error)
+    {error, Error} ->
+      lager:warning("Call failed:~n\tCall: ~p~n\tError:~p", [Call, Error]),
+      throw(Error)
   end.
 
 normalize_unicode(String) ->
   case lists:dropwhile(fun(Char) -> Char =< 255 end, String) of
-    [] -> String;
-    _ -> binary_to_list(unicode:characters_to_binary(String))
+    [] -> list_to_binary(String);
+    _ -> unicode:characters_to_binary(String)
   end.
 
 normalize(Doc) ->
   [{case Key of
       Key when is_atom(Key) -> Key;
-      Key when is_list(Key) -> list_to_atom(normalize_unicode(Key));
+      Key when is_list(Key) -> binary_to_atom(normalize_unicode(Key), utf8);
       Key when is_binary(Key) -> binary_to_atom(Key, utf8)
     end, validate(Value)} || {Key, Value} <- Doc].
 
@@ -216,8 +218,10 @@ validate(#geo{lat = Lat}) when -90.0 > Lat; Lat > 90.0 ->
   throw({invalid_latitude, Lat});
 validate(#geo{lng = Lng}) when -180.0 > Lng; Lng > 180.0 ->
   throw({invalid_longitude, Lng});
+validate(Value) when is_list(Value) andalso length(Value) > 65535 ->
+  throw({invalid_string, Value});
 validate(Value) when is_list(Value) ->
-  normalize_unicode(Value);
+  binary_to_list(normalize_unicode(Value));
 validate(Value) ->
   Value.
 

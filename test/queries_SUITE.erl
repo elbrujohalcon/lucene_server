@@ -1,14 +1,14 @@
 %% @hidden
 -module(queries_SUITE).
 
--export([all/0, distance/1, rpc/1, filters/1, rpc_return/2, rpc_echo/1, rpc_timeout/1, hsin/2, init_per_suite/1, end_per_suite/1]).
+-export([all/0, distance/1, rpc/1, filters/1, rpc_return/2, rpc_echo/1, rpc_timeout/1, hsin/2, too_long/1, init_per_suite/1, end_per_suite/1]).
 
 -include("lucene.hrl").
 
 -type config() :: [{atom(), term()}].
 
 -spec all() -> [atom()].
-all() -> [distance, rpc, filters].
+all() -> [distance, rpc, filters, too_long].
 
 -spec init_per_suite(config()) -> config().
 init_per_suite(Config) ->
@@ -19,6 +19,21 @@ init_per_suite(Config) ->
 -spec end_per_suite(config()) -> config().
 end_per_suite(Config) ->
   Config.
+
+-spec too_long(config()) -> _.
+too_long(_Config) ->
+  PageSize = 5,
+
+  ok = lucene:clear(),
+  Docs = [[{x, x}]],
+  ok = lucene:add(Docs),
+
+  Query = "x:x OR x:" ++ [$a + I rem 20 || I <- lists:seq(1, 65535)],
+
+  {_, M0} = lucene:match(Query, PageSize),
+  1 = proplists:get_value(total_hits, M0),
+
+  lucene:clear().
 
 -spec filters(config()) -> _.
 filters(_Config) ->

@@ -39,9 +39,9 @@ public class LuceneNode {
 		String nodeName = args.length >= 2 ? args[1]
 				: "lucene_server_java@localhost";
 		try {
-			if (args.length >= 4)
+			if (args.length >= 5)
 				System.getProperties().setProperty("OtpConnection.trace",
-						args[3]);
+						args[4]);
 			NODE = args.length >= 3 ? new OtpNode(nodeName, args[2])
 					: new OtpNode(nodeName);
 			PEER = peerName;
