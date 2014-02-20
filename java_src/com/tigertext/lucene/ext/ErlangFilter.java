@@ -24,6 +24,8 @@ import com.ericsson.otp.erlang.OtpErlangLong;
 import com.ericsson.otp.erlang.OtpErlangObject;
 import com.ericsson.otp.erlang.OtpErlangString;
 import com.ericsson.otp.erlang.OtpErlangTuple;
+import com.ericsson.otp.erlang.OtpInputStream;
+import com.ericsson.otp.erlang.OtpOutputStream;
 import com.ericsson.otp.stdlib.OtpGenServer;
 import com.tigertext.lucene.DocumentTranslator.FieldType;
 import com.tigertext.lucene.LuceneNode;
@@ -35,19 +37,19 @@ import com.tigertext.lucene.LuceneNode;
  * @author Fernando Benavides <elbrujohalcon@inaka.net>
  */
 public class ErlangFilter extends Filter {
-	private static final Logger		jlog				= Logger.getLogger(ErlangFilter.class
-																.getName());
+	private static final Logger jlog = Logger.getLogger(ErlangFilter.class
+			.getName());
 
-	private static final long		serialVersionUID	= 892972394357766013L;
-	private final OtpErlangAtom		mod;
-	private final OtpErlangAtom		fun;
-	private final String			fieldName;
-	private Map<Integer, Double>	scores;
-	private int						nextDocBase;
+	private static final long serialVersionUID = 892972394357766013L;
+	private final OtpErlangAtom mod;
+	private final OtpErlangAtom fun;
+	private final String fieldName;
+	private Map<Integer, Double> scores;
+	private int nextDocBase;
 
-	private FieldType				fieldType;
+	private FieldType fieldType;
 
-	private OtpErlangString			arg;
+	private OtpErlangString arg;
 
 	/**
 	 * Default constructor
@@ -58,8 +60,8 @@ public class ErlangFilter extends Filter {
 	 *            Erlang function
 	 * @param arg
 	 *            First argument(s) on the call to mod:fun. They're written like
-	 *            io_lib:format(...). They'll be parsed on the Erlang side before
-	 *            calling mod:fun
+	 *            io_lib:format(...). They'll be parsed on the Erlang side
+	 *            before calling mod:fun
 	 * @param fieldName
 	 *            Lucene field to consider
 	 * @param fieldType
@@ -111,8 +113,23 @@ public class ErlangFilter extends Filter {
 		final FixedBitSet bits = new FixedBitSet(reader.maxDoc());
 
 		// {Mod, Fun, [Values]}
-		OtpErlangTuple call = new OtpErlangTuple(new OtpErlangObject[] {
-				this.mod, this.fun, this.arg, new OtpErlangList(docValues) });
+		OtpErlangTuple call;
+
+		if (this.mod.atomValue().startsWith("!")) {
+			OtpErlangAtom realMod = new OtpErlangAtom(this.mod.atomValue()
+					.substring(1));
+			OtpErlangList listToSend = new OtpErlangList(docValues);
+			OtpOutputStream oos = new OtpOutputStream(10485760);
+			oos.write_any(listToSend);
+			OtpErlangBinary realValues = new OtpErlangBinary(oos.toByteArray());
+			oos.close();
+			call = new OtpErlangTuple(new OtpErlangObject[] { realMod,
+					this.fun, this.arg, realValues });
+		} else {
+			call = new OtpErlangTuple(new OtpErlangObject[] { this.mod,
+					this.fun, this.arg, new OtpErlangList(docValues) });
+		}
+
 		try {
 			jlog.fine("Calling lucene @ " + LuceneNode.PEER + ":\n\t"
 					+ this.mod + ":" + this.fun);
@@ -123,17 +140,13 @@ public class ErlangFilter extends Filter {
 				jlog.warning("The rpc call to " + this.mod + ":" + this.fun
 						+ " timed out. No results will be returned");
 			} else if (response instanceof OtpErlangList) {
-				OtpErlangList results = (OtpErlangList) response;
-				for (int docid = 0; docid < docValues.length; docid++) {
-					OtpErlangObject result = results.elementAt(docid);
-					if (result instanceof OtpErlangDouble) {
-						scores.put(docid + docBase,
-								((OtpErlangDouble) result).doubleValue());
-						bits.set(docid);
-					} else {
-						bits.clear(docid);
-					}
-				}
+				parseCallResponse(docBase, docValues, bits, response);
+			} else if (response instanceof OtpErlangBinary) {
+				OtpErlangBinary binaryResponse = (OtpErlangBinary) response;
+				OtpInputStream ois = new OtpInputStream(
+						binaryResponse.binaryValue());
+				parseCallResponse(docBase, docValues, bits, ois.read_any());
+				ois.close();
 			} else {
 				jlog.severe("The rpc call to " + this.mod + ":" + this.fun
 						+ " failed: " + response
@@ -158,6 +171,22 @@ public class ErlangFilter extends Filter {
 
 		jlog.finer("Bits: " + bits.getBits());
 		return bits;
+	}
+
+	private void parseCallResponse(final int docBase,
+			final OtpErlangObject[] docValues, final FixedBitSet bits,
+			OtpErlangObject response) {
+		OtpErlangList results = (OtpErlangList) response;
+		for (int docid = 0; docid < docValues.length; docid++) {
+			OtpErlangObject result = results.elementAt(docid);
+			if (result instanceof OtpErlangDouble) {
+				scores.put(docid + docBase,
+						((OtpErlangDouble) result).doubleValue());
+				bits.set(docid);
+			} else {
+				bits.clear(docid);
+			}
+		}
 	}
 
 	private OtpErlangObject[] getGeos(IndexReader reader) throws IOException {
