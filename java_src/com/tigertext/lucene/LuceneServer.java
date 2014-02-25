@@ -3,6 +3,7 @@ package com.tigertext.lucene;
 import java.io.File;
 import java.io.IOException;
 import java.io.Reader;
+import java.io.UnsupportedEncodingException;
 import java.security.InvalidParameterException;
 import java.util.ArrayList;
 import java.util.List;
@@ -162,7 +163,8 @@ public class LuceneServer extends OtpGenServer {
 			try {
 
 				String queryString = new String(
-						((OtpErlangBinary) cmdTuple.elementAt(1)).binaryValue());
+						((OtpErlangBinary) cmdTuple.elementAt(1)).binaryValue(),
+						"ISO-8859-1");
 				int pageSize = ((OtpErlangLong) cmdTuple.elementAt(2))
 						.intValue();
 				OtpErlangObject[] sortFieldNames = ((OtpErlangList) cmdTuple
@@ -222,6 +224,12 @@ public class LuceneServer extends OtpGenServer {
 				OtpErlangTuple reply = new OtpErlangTuple(
 						new OtpErlangObject[] { new OtpErlangAtom("error"),
 								new OtpErlangString(ufte.getMessage()) });
+				return reply;
+			} catch (UnsupportedEncodingException uee) {
+				uee.printStackTrace();
+				OtpErlangTuple reply = new OtpErlangTuple(
+						new OtpErlangObject[] { new OtpErlangAtom("error"),
+								new OtpErlangString(uee.getMessage()) });
 				return reply;
 			}
 		} else if (cmdName.atomValue().equals("continue")) {
