@@ -1,7 +1,7 @@
 %% @hidden
 -module(queries_SUITE).
 
--export([all/0, distance/1, rpc/1, filters/1, sorting/1, too_long/1, init_per_suite/1, end_per_suite/1]).
+-export([all/0, distance/1, rpc/1, filters/1, sorting/1, too_long/1, unicode/1, init_per_suite/1, end_per_suite/1]).
 -export([rpc_return/2, rpc_echo/1, rpc_timeout/1, hsin/2]).
 
 -include("lucene.hrl").
@@ -9,7 +9,7 @@
 -type config() :: [{atom(), term()}].
 
 -spec all() -> [atom()].
-all() -> [distance, rpc, filters, too_long, sorting].
+all() -> [distance, rpc, filters, too_long, sorting, unicode].
 
 -spec init_per_suite(config()) -> config().
 init_per_suite(Config) ->
@@ -83,6 +83,22 @@ too_long(_Config) ->
   ok = lucene:add(Docs),
 
   Query = "x:x OR x:" ++ [$a + I rem 20 || I <- lists:seq(1, 65535)],
+
+  {_, M0} = lucene:match(Query, PageSize),
+  1 = proplists:get_value(total_hits, M0),
+
+  lucene:clear().
+
+-spec unicode(config()) -> _.
+unicode(_Config) ->
+  PageSize = 5,
+
+  ok = lucene:clear(),
+  UnicodeChars = [12396,12427,12434,32,25105,12364],
+  Docs = [[{x, UnicodeChars}]],
+  ok = lucene:add(Docs),
+
+  Query = [$x, $:, 12396, $*],
 
   {_, M0} = lucene:match(Query, PageSize),
   1 = proplists:get_value(total_hits, M0),
