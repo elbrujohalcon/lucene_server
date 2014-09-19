@@ -1,6 +1,7 @@
 -module(lucene_SUITE).
 
--export([all/0, keys/1, stop/1, add_del_clear/1, save/1, complete_coverage/1, init_per_suite/1, end_per_suite/1]).
+-export([all/0, keys/1, stop/1, add_del_clear/1, save/1, complete_coverage/1,
+         init_per_suite/1, end_per_suite/1]).
 
 -include("lucene.hrl").
 
@@ -127,7 +128,8 @@ complete_coverage(_Config) ->
 
   ok = lucene_server:start(),
 
-  LucenePath = filename:join(filename:dirname(code:priv_dir(lucene_server)), "ebin"),
+  LucenePath =
+    filename:join(filename:dirname(code:priv_dir(lucene_server)), "ebin"),
   try
     true = code:del_path(LucenePath),
     [Name, Server] = string:tokens(atom_to_list(node()), "@"),
@@ -170,7 +172,8 @@ stop(_Config) ->
 
 -spec keys(config()) -> _.
 keys(_Config) ->
-  lucene:add([[{a, [C]}, {"l", [C]}, {<<"b">>, [C]}] || C <- lists:seq($a, $c)]),
+  lucene:add(
+    [[{a, [C]}, {"l", [C]}, {<<"b">>, [C]}] || C <- lists:seq($a, $c)]),
   {R, _} = lucene:match("a:[a TO c]", 3),
   {R, _} = lucene:match("l:[a TO c]", 3),
   {R, _} = lucene:match("b:[a TO c]", 3).
