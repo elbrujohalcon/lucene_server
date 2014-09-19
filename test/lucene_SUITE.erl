@@ -136,7 +136,7 @@ complete_coverage(_Config) ->
 		P = spawn(lucene_server, start, []),
 		timer:sleep(1000),
 		%% It shouldn't have been able to start...
-		true = erlang:is_process_alive(P),
+		false = erlang:is_process_alive(P),
 		lucene ! {nodedown, list_to_atom(Name ++ "_java@" ++ Server)}
 	after
 		code:add_patha(LucenePath),
