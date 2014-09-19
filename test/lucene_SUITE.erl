@@ -73,7 +73,7 @@ complete_coverage(_Config) ->
     _:E -> {timeout, _} = E
   end,
 
-  {[],_} = lucene:match("no:match", 1, [], infinity),
+  {[], _} = lucene:match("no:match", 1, [], infinity),
 
   case OldWorkers of
     undefined -> application:unset_env(lucene_server, workers);
